@@ -48,6 +48,10 @@
 #include "itkImageFileWriter.h"
 
 #include <itkImageToVTKImageFilter.h>
+
+#define USE_BASIC_IMAGE_VIEWER_APPROACH 0
+#if USE_BASIC_IMAGE_VIEWER_APPROACH
+
 #include "vtkVersion.h"
 #include "vtkImageViewer.h"
 #include "vtkImageMapper3D.h"
@@ -56,6 +60,27 @@
 #include "vtkImageActor.h"
 #include "vtkInteractorStyleImage.h"
 #include "vtkRenderer.h"
+
+#else
+
+#include "vtkSmartPointer.h"
+#include "vtkImageReader2.h"
+#include "vtkMatrix4x4.h"
+#include "vtkImageReslice.h"
+#include "vtkLookupTable.h"
+#include "vtkImageMapToColors.h"
+#include "vtkImageActor.h"
+#include "vtkRenderer.h"
+#include "vtkRenderWindow.h"
+#include "vtkRenderWindowInteractor.h"
+#include "vtkInteractorStyleImage.h"
+#include "vtkCommand.h"
+#include "vtkImageData.h"
+#include "vtkImageViewer.h"
+
+#include "vtkImageInteractionCallback.hpp"
+
+#endif
 
 // Software Guide : EndCodeSnippet
 int main( int argc, char* argv[] )
@@ -258,16 +283,14 @@ int main( int argc, char* argv[] )
         // TGW: snip - remove writer code from DicomSeriesReadImageWrite2.cxx and replace with renderer
         typedef itk::ImageToVTKImageFilter<ImageType>       ConnectorType;
         ConnectorType::Pointer connector = ConnectorType::New();
-        
         connector->SetInput(reader->GetOutput());
-        
-        vtkSmartPointer<vtkImageActor> actor = vtkSmartPointer<vtkImageActor>::New();
-#if VTK_MAJOR_VERSION <= 5
-        actor->SetInput(connector->GetOutput());
-#else
         connector->Update();
+
+#if USE_BASIC_IMAGE_VIEWER_APPROACH
+
+        vtkSmartPointer<vtkImageActor> actor = vtkSmartPointer<vtkImageActor>::New();
         actor->GetMapper()->SetInputData(connector->GetOutput());
-#endif
+
         vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
         renderer->AddActor(actor);
         renderer->ResetCamera();
@@ -284,7 +307,114 @@ int main( int argc, char* argv[] )
         renderWindowInteractor->Initialize();
         
         renderWindowInteractor->Start();
-
+#else
+// TGW yet another method using vtkImageViewer (https://itk.org/CourseWare/Training/GettingStarted-II.pdf)
+// But this is a very simple 2D viewer...which can't on its own do coronal/sagittal slices, so probably want something more general
+//        vtkSmartPointer<vtkRenderWindowInteractor> renderWindowInteractor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
+//        vtkSmartPointer<vtkImageViewer> viewer = vtkImageViewer::New();
+//        viewer->SetupInteractor(renderWindowInteractor);
+//        viewer->SetInputData(connector->GetOutput());
+//        viewer->Render();
+//        viewer->SetColorWindow(1000);
+//        viewer->SetColorLevel(500);
+//        renderWindowInteractor->Start();
+        
+        int extent[6];
+        double spacing[3];
+        double origin[3];
+        connector->GetOutput()->GetExtent(extent);
+        connector->GetOutput()->GetSpacing(spacing);
+        connector->GetOutput()->GetOrigin(origin);
+        
+        double center[3];
+        center[0] = origin[0] + spacing[0] * 0.5 * (extent[0] + extent[1]);
+        center[1] = origin[1] + spacing[1] * 0.5 * (extent[2] + extent[3]);
+        center[2] = origin[2] + spacing[2] * 0.5 * (extent[4] + extent[5]);
+        
+        // Matrices for axial, coronal, sagittal, oblique view orientations
+        static double axialElements[16] = {
+                 1, 0, 0, 0,
+                 0, 1, 0, 0,
+                 0, 0, 1, 0,
+                 0, 0, 0, 1 };
+        
+        static double coronalElements[16] = {
+                 1, 0, 0, 0,
+                 0, 0, 1, 0,
+                 0,-1, 0, 0,
+                 0, 0, 0, 1 };
+    
+        static double sagittalElements[16] = {
+            0, 0,-1, 0,
+            1, 0, 0, 0,
+            0,-1, 0, 0,
+            0, 0, 0, 1 };
+        
+        //static double obliqueElements[16] = {
+        //         1, 0, 0, 0,
+        //         0, 0.866025, -0.5, 0,
+        //         0, 0.5, 0.866025, 0,
+        //         0, 0, 0, 1 };
+        
+        // Set the slice orientation
+        vtkSmartPointer<vtkMatrix4x4> resliceAxes = vtkSmartPointer<vtkMatrix4x4>::New();
+        resliceAxes->DeepCopy(axialElements);
+        // Set the point through which to slice
+        resliceAxes->SetElement(0, 3, center[0]);
+        resliceAxes->SetElement(1, 3, center[1]);
+        resliceAxes->SetElement(2, 3, center[2]);
+        
+        // Extract a slice in the desired orientation
+        vtkSmartPointer<vtkImageReslice> reslice = vtkSmartPointer<vtkImageReslice>::New();
+        reslice->SetInputData(connector->GetOutput());
+        reslice->SetOutputDimensionality(2);
+        reslice->SetResliceAxes(resliceAxes);
+        reslice->SetInterpolationModeToLinear();
+        reslice->Update();
+        
+        // Create a greyscale lookup table
+        vtkSmartPointer<vtkLookupTable> table = vtkSmartPointer<vtkLookupTable>::New();
+        table->SetRange(0, 1000); // image intensity range
+        table->SetValueRange(0.0, 1.0); // from black to white
+        table->SetSaturationRange(0.0, 0.0); // no color saturation
+        table->SetRampToLinear();
+        table->Build();
+        
+        // Map the image through the lookup table
+        vtkSmartPointer<vtkImageMapToColors> color = vtkSmartPointer<vtkImageMapToColors>::New();
+        color->SetLookupTable(table);
+        color->SetInputData(reslice->GetOutput());
+        color->Update();
+        
+        // Display the image
+        vtkSmartPointer<vtkImageActor> actor = vtkSmartPointer<vtkImageActor>::New();
+        actor->SetInputData(color->GetOutput());
+        
+        vtkSmartPointer<vtkRenderer> renderer = vtkSmartPointer<vtkRenderer>::New();
+        renderer->AddActor(actor);
+        
+        vtkSmartPointer<vtkRenderWindow> window = vtkSmartPointer<vtkRenderWindow>::New();
+        window->AddRenderer(renderer);
+        
+        // Set up the interaction
+        vtkSmartPointer<vtkInteractorStyleImage> imageStyle = vtkSmartPointer<vtkInteractorStyleImage>::New();
+        vtkSmartPointer<vtkRenderWindowInteractor> interactor = vtkSmartPointer<vtkRenderWindowInteractor>::New();
+        interactor->SetInteractorStyle(imageStyle);
+        window->SetInteractor(interactor);
+        window->Render();
+        
+        vtkSmartPointer<vtkImageInteractionCallback> callback = vtkSmartPointer<vtkImageInteractionCallback>::New();
+        callback->SetImageReslice(reslice);
+        callback->SetInteractor(interactor);
+        
+        imageStyle->AddObserver(vtkCommand::MouseMoveEvent, callback);
+        imageStyle->AddObserver(vtkCommand::LeftButtonPressEvent, callback);
+        imageStyle->AddObserver(vtkCommand::LeftButtonReleaseEvent, callback);
+        
+        // Start interaction
+        // The Start() method doesn't return until the window is closed by the user
+        interactor->Start();
+#endif
     
     }
     catch (itk::ExceptionObject &ex)
