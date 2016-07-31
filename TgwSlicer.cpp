@@ -405,6 +405,7 @@ int main( int argc, char* argv[] )
         
         vtkSmartPointer<vtkImageInteractionCallback> callback = vtkSmartPointer<vtkImageInteractionCallback>::New();
         callback->SetImageReslice(reslice);
+        callback->SetImageColors(color); ///WHY ARE WE HAVING TO SET THIS????
         callback->SetInteractor(interactor);
         
         imageStyle->AddObserver(vtkCommand::MouseMoveEvent, callback);

@@ -12,6 +12,7 @@
 #include "vtkCommand.h"
 #include "vtkImageReslice.h"
 #include "vtkRenderWindowInteractor.h"
+#include "vtkImageMapToColors.h"
 
 // The mouse motion callback, to turn "Slicing" on and off
 class vtkImageInteractionCallback : public vtkCommand
@@ -26,6 +27,10 @@ public:
     
     vtkImageReslice *GetImageReslice();
     
+    void SetImageColors(vtkImageMapToColors *color) ;
+    
+    vtkImageMapToColors *GetImageColors();
+
     void SetInteractor(vtkRenderWindowInteractor *interactor);
     
     vtkRenderWindowInteractor *GetInteractor() ;
@@ -40,6 +45,8 @@ private:
     // Pointer to vtkImageReslice
     vtkImageReslice *ImageReslice;
     
+    vtkImageMapToColors *Colors;
+
     // Pointer to the interactor
     vtkRenderWindowInteractor *Interactor;
 };

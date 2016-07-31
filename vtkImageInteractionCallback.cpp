@@ -30,6 +30,16 @@ void vtkImageInteractionCallback::SetImageReslice(vtkImageReslice *reslice) {
 vtkImageReslice *vtkImageInteractionCallback::GetImageReslice() {
     return this->ImageReslice; };
 
+void vtkImageInteractionCallback::SetImageColors(vtkImageMapToColors *color)
+{
+    this->Colors = color;
+}
+
+vtkImageMapToColors *vtkImageInteractionCallback::GetImageColors()
+{
+    return this->Colors;
+}
+
 void vtkImageInteractionCallback::SetInteractor(vtkRenderWindowInteractor *interactor) {
     this->Interactor = interactor; };
 
@@ -76,6 +86,8 @@ void vtkImageInteractionCallback::Execute(vtkObject *, unsigned long event, void
             matrix->SetElement(0, 3, center[0]);
             matrix->SetElement(1, 3, center[1]);
             matrix->SetElement(2, 3, center[2]);
+            reslice->Update();
+            this->Colors->Update(); /// WHY DO WE HAVE TO DO THIS MANUALLY???????
             interactor->Render();
         }
         else
