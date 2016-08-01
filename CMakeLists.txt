@@ -14,6 +14,6 @@ else()
   set(Glue ItkVtkGlue)
 endif()
  
-add_executable(ImageSlicing MACOSX_BUNDLE ImageSlicing.cxx)
+add_executable(ImageSlicing MACOSX_BUNDLE TgwSlicer.cpp)
 target_link_libraries(ImageSlicing
   ${Glue}  ${VTK_LIBRARIES} ${ITK_LIBRARIES})
