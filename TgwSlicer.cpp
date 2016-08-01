@@ -85,10 +85,10 @@
 // Software Guide : EndCodeSnippet
 int main( int argc, char* argv[] )
 {
-    if( argc < 3 )
+    if( argc < 2 )
     {
         std::cerr << "Usage: " << std::endl;
-        std::cerr << argv[0] << " DicomDirectory  outputFileName  [seriesName]"
+        std::cerr << argv[0] << " DicomDirectory [seriesName]"
         << std::endl;
         return EXIT_FAILURE;
     }
@@ -215,9 +215,9 @@ int main( int argc, char* argv[] )
         // Software Guide : EndLatex
         // Software Guide : BeginCodeSnippet
         std::string seriesIdentifier;
-        if( argc > 3 ) // If no optional series identifier
+        if( argc > 2 ) // If no optional series identifier
         {
-            seriesIdentifier = argv[3];
+            seriesIdentifier = argv[2];
         }
         else
         {
