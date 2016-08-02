@@ -82,6 +82,8 @@
 
 #endif
 
+#include "BoxCarSmoothFilter.h"
+
 // Software Guide : EndCodeSnippet
 int main( int argc, char* argv[] )
 {
@@ -278,12 +280,17 @@ int main( int argc, char* argv[] )
         // invoking the \code{GetOutput()} method of the reader.
         //
         // Software Guide : EndLatex
-        
+
+        // TGW: add filter after IVT reading but before VTK conversion
+        typedef BoxCarSmoothFilter<ImageType> FilterType;
+        FilterType::Pointer boxCarFilter = FilterType::New();
+        boxCarFilter->SetInput(reader->GetOutput());
+
         
         // TGW: snip - remove writer code from DicomSeriesReadImageWrite2.cxx and replace with renderer
         typedef itk::ImageToVTKImageFilter<ImageType>       ConnectorType;
         ConnectorType::Pointer connector = ConnectorType::New();
-        connector->SetInput(reader->GetOutput());
+        connector->SetInput(boxCarFilter->GetOutput());
         connector->Update();
         
 #if USE_BASIC_IMAGE_VIEWER_APPROACH
