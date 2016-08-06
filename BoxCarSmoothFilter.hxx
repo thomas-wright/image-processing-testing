@@ -41,7 +41,7 @@ void BoxCarSmoothFilter< TImage >::GenerateData()
     typedef itk::ConstNeighborhoodIterator< TImage > NeighborhoodIteratorType;
     typename NeighborhoodIteratorType::RadiusType radius;
     radius.Fill(1);
-    NeighborhoodIteratorType inputIt(radius, input, input->GetRequestedRegion());
+    NeighborhoodIteratorType inputIt(radius, input, output->GetRequestedRegion());
     
     // Normal iterator for iterating over the output
     typedef itk::ImageRegionIterator< TImage > IteratorType;
@@ -137,11 +137,15 @@ void BoxCarSmoothFilter< TImage >::ThreadedGenerateData( const OutputImageRegion
     typename NeighborhoodIteratorType::RadiusType radius;
     radius.Fill(1);
     NeighborhoodIteratorType inputIt(radius, input, outputRegionForThread);
+  
+    // If we know that we don't need to check any boundary conditions, then this gives a bit of extra performance
+    // (but not as much as I expected (10-15%?).
+    inputIt.NeedToUseBoundaryConditionOff();
     
     // Normal iterator for iterating over the output
     typedef itk::ImageRegionIterator< TImage > IteratorType;
     IteratorType outputIt( output, outputRegionForThread);
-    
+
     // Now loop!
     for ( inputIt.GoToBegin(), outputIt.GoToBegin(); !inputIt.IsAtEnd(); ++inputIt, ++outputIt )
     {
