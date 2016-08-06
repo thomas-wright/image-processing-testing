@@ -46,8 +46,8 @@
 #include "itkGDCMSeriesFileNames.h"
 #include "itkImageSeriesReader.h"
 #include "itkImageFileWriter.h"
-
-#include <itkImageToVTKImageFilter.h>
+#include "itkCropImageFilter.h"
+#include "itkImageToVTKImageFilter.h"
 
 #define USE_BASIC_IMAGE_VIEWER_APPROACH 0
 #if USE_BASIC_IMAGE_VIEWER_APPROACH
@@ -285,12 +285,32 @@ int main( int argc, char* argv[] )
         typedef BoxCarSmoothFilter<ImageType> FilterType;
         FilterType::Pointer boxCarFilter = FilterType::New();
         boxCarFilter->SetInput(reader->GetOutput());
-
+        
+        // Only ask for inset region so that we don't have problems with boundaries
+        typename ImageType::RegionType region = reader->GetOutput()->GetLargestPossibleRegion();
+        typename ImageType::RegionType insetRegion;
+        insetRegion.SetIndex( { {region.GetIndex()[0]+1, region.GetIndex()[1]+1, region.GetIndex()[2]+1} } );
+        insetRegion.SetSize( { {region.GetSize()[0]-2, region.GetSize()[1]-2, region.GetSize()[2]-2} } );
+        boxCarFilter->GetOutput()->SetRequestedRegion(insetRegion);
+        boxCarFilter->Update();
+        
+        // Although we only process the box-car filter above within an inset region that avoids problems with the
+        // boundaries, the ITK->VTK filter below seems to require the entire image to be filtered. So here we add
+        // a cropping filter to the pipeline so that the ITK->VTK filter only asks for the data that has actually
+        // been filtered.
+        typedef itk::CropImageFilter<ImageType,ImageType> CropFilterType;
+        CropFilterType::Pointer cropFilter = CropFilterType::New();
+        cropFilter->SetInput(boxCarFilter->GetOutput());
+        
+        // Equal cropping of 1 voxel all the way around
+        ImageType::SizeType cropSize;
+        cropSize.Fill(2);
+        cropFilter->SetBoundaryCropSize(cropSize);
         
         // TGW: snip - remove writer code from DicomSeriesReadImageWrite2.cxx and replace with renderer
-        typedef itk::ImageToVTKImageFilter<ImageType>       ConnectorType;
+        typedef itk::ImageToVTKImageFilter<ImageType> ConnectorType;
         ConnectorType::Pointer connector = ConnectorType::New();
-        connector->SetInput(boxCarFilter->GetOutput());
+        connector->SetInput(cropFilter->GetOutput());
         connector->Update();
         
 #if USE_BASIC_IMAGE_VIEWER_APPROACH
