@@ -17,7 +17,7 @@ namespace itk
     class TimeProbe;
 }
 
-#define USE_THREADED_IMPLEMENTATION 1
+#define USE_THREADED_IMPLEMENTATION 0
 
 /**
  * Simple box-car filter implementation using a 3x3x3 voxel kernel.

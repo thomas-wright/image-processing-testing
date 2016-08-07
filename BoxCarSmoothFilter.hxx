@@ -15,6 +15,7 @@
 #include "itkImageIterator.h"
 #include "itkTimeProbe.h"
 #include "itkConstantBoundaryCondition.h"
+#include "itkNeighborhoodAlgorithm.h"
 
 template< typename TImage >
 void BoxCarSmoothFilter< TImage >::PrintSelf( std::ostream& os, itk::Indent indent ) const
@@ -35,29 +36,44 @@ void BoxCarSmoothFilter< TImage >::GenerateData()
     
     this->AllocateOutputs();
 
-#define USE_NEIGHBOURHOOD_ITERATOR 0
+#define USE_NEIGHBOURHOOD_ITERATOR 1
 #if USE_NEIGHBOURHOOD_ITERATOR
-    // Set up neighbourhood iterator for iterating over the input
+    
+    // 3x3x3 kernel, so radius is 1 around our central voxel
+    const int radiusSize = 1;
     typedef itk::ConstNeighborhoodIterator< TImage > NeighborhoodIteratorType;
     typename NeighborhoodIteratorType::RadiusType radius;
-    radius.Fill(1);
-    NeighborhoodIteratorType inputIt(radius, input, output->GetRequestedRegion());
+    radius.Fill(radiusSize);
+
+    // To properly handle the boundaries, we need to separate the faces (i.e., boundaries) of the volume from
+    // the middle. Then we can process the middle without worrying about bounds checking.
+    typedef itk::NeighborhoodAlgorithm::ImageBoundaryFacesCalculator< TImage > FaceCalculatorType;
+    FaceCalculatorType faceCalculator;
+    typename FaceCalculatorType::FaceListType faceList;
+    faceList = faceCalculator(input, output->GetRequestedRegion(), radius);
+    typename FaceCalculatorType::FaceListType::iterator fit;
     
     // Normal iterator for iterating over the output
     typedef itk::ImageRegionIterator< TImage > IteratorType;
-    IteratorType outputIt( output, output->GetRequestedRegion());
     
-    // Now loop!
-    for ( inputIt.GoToBegin(), outputIt.GoToBegin(); !inputIt.IsAtEnd(); ++inputIt, ++outputIt )
+    // Now loop! First over the list of regions we got by splitting our volume into the different faces
+    for ( fit=faceList.begin(); fit != faceList.end(); ++fit)
     {
-        float accumulator = 0;
-        for ( int kk = 0; kk < inputIt.Size(); ++kk )
+        // Now for each of those face regions, do the same processing
+        NeighborhoodIteratorType inputIt(radius, input, *fit);
+        IteratorType outputIt( output, *fit);
+        for (inputIt.GoToBegin(), outputIt.GoToBegin(); ! inputIt.IsAtEnd(); ++inputIt, ++outputIt)
         {
-            accumulator += inputIt.GetPixel( kk );
+            float accumulator = 0;
+            for ( int kk = 0; kk < inputIt.Size(); ++kk )
+            {
+                accumulator += inputIt.GetPixel( kk );
+            }
+            const typename TImage::PixelType filteredValue = static_cast< typename TImage::PixelType >( accumulator /= inputIt.Size() );
+            outputIt.Set( filteredValue );
         }
-        const typename TImage::PixelType filteredValue = static_cast< typename TImage::PixelType >( accumulator /= inputIt.Size() );
-        outputIt.Set( filteredValue );
     }
+    
 #else
     const typename TImage::RegionType & outputRegion = output->GetRequestedRegion();
     typename TImage::IndexType start = outputRegion.GetIndex();
